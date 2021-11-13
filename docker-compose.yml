@@ -1,0 +1,55 @@
+# [前提] docker-compose内で環境変数を呼び出す時の条件と方法
+# [条件] .envファイルとdocker-compose.ymlファイルが同じ階層にあること(同じ階層に存在していれば、特に何も指定しなくても環境変数の値を参照できるようになる)
+# [方法] $環境変数の変数名 or ${環境変数の変数名}
+# 例) ${WORKDIR} => app になる
+
+# docker-composeはバージョンによって記述方が変わるため、Composeファイルのバージョンを指定しています。
+# ここのバージョンはdockerのバージョンに依存します。
+version: "3.8"
+
+# service = コンテナのこと
+services:
+  db:
+    # image...ベースイメージを定義するキー
+    image: postgres:13.1-alpine
+    # environment...環境変数を定義するキー
+    environment:
+      # OSのタイムゾーン
+      TZ: UTC
+      # postgresのタイムゾーン
+      PGTZ: UTC
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+    # ホスト側(ローカル側)のディレクトリをコンテナで使用する
+    # volumes: <ローカルのパス : コンテナのパス>
+    volumes:
+      - ./api/tmp/db:/var/lib/postgresql/data
+
+  api:
+    # build...ベースイメージとなるDockerfileを指定するキー
+    # 本来であれば(argsを使わないのであれば) build: ./api と記述すればOK
+    # 今回はargsを使ってDockerfileへ環境変数の値を渡しているため、 context: ./api としている
+    build:
+      context: ./api
+      args:
+        WORKDIR: $WORKDIR
+    environment:
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+    volumes:
+      - ./api:/$WORKDIR
+    depends_on:
+      - db
+    ports:
+      - "$API_PORT:3000"
+
+  front:
+    build:
+      context: ./front
+      args:
+        WORKDIR: $WORKDIR
+    command: yarn run dev
+    volumes:
+      - ./front:/$WORKDIR
+    ports:
+      - "$FRONT_PORT:3000"
+    depends_on:
+      - api
